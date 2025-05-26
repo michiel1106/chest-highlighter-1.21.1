@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "chest-highlighter",
+	"version": "${version}",
+	"name": "Chest Highlighter",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/chest-highlighter/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"bikerboys.chesthighlighter.ChestHighlighter"
+		],
+		"client": [
+			"bikerboys.chesthighlighter.ChestHighlighterClient"
+		]
+	},
+	"mixins": [
+		"chest-highlighter.mixins.json",
+		{
+			"config": "chest-highlighter.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.15.14",
+		"minecraft": "*",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	}
+}
