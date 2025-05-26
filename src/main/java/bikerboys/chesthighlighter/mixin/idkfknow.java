@@ -2,6 +2,7 @@ package bikerboys.chesthighlighter.mixin;
 
 
 import bikerboys.chesthighlighter.ChestHighlighter;
+import bikerboys.chesthighlighter.ChestTag;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.entity.ChestBlockEntity;
@@ -11,6 +12,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.AbstractList;
+import java.util.ArrayList;
 
 @Mixin(ChestBlockEntity.class)
 public class idkfknow {
@@ -34,8 +38,11 @@ public class idkfknow {
                 if(!ChestHighlighter.world.isClient) {
 
 
-                    if (!ChestHighlighter.chestpos.containsKey(blockPos)) {
-                        ChestHighlighter.chestpos.put(chestBlock, blockPos);
+                    if (!ChestHighlighter.chestBlockEntity.containsValue(blockPos)) {
+
+
+
+                        ChestHighlighter.chestBlockEntity.put(chestBlock, blockPos);
                     }
                 }
             }
