@@ -27,6 +27,7 @@ import net.minecraft.predicate.entity.EntityPredicates;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -38,7 +39,8 @@ import java.util.*;
 
 public class ChestHighlighter implements ModInitializer {
 	public static final String MOD_ID = "chest-highlighter";
-	public static ServerWorld world;
+
+	public static ServerWorld chestblockserverworld;
 	public static Map<ChestBlockEntity, ChestTag> glowchestswhatever = new HashMap<>();
 	public static Map<ChestBlockEntity, BlockPos> chestBlockEntity = new HashMap<>();
 	public static Map<ChestBlockEntity, Entity> haveblockdisplay = new HashMap<>();
@@ -68,11 +70,31 @@ public class ChestHighlighter implements ModInitializer {
 		}));
 
 
+		ServerLifecycleEvents.SERVER_STARTED.register((minecraft) -> {
+			chestblockserverworld = minecraft.getOverworld();
+		});
+
+		ServerWorldEvents.LOAD.register(((server, world) -> {
+			chestblockserverworld = world;
+
+		}));
+
+
 		MidnightConfig.init(MOD_ID, Config.class);
 
 
-		ServerTickEvents.START_WORLD_TICK.register((serverWorld -> world = serverWorld));
 
+
+		CommandRegistrationCallback.EVENT.register(((commandDispatcher, commandRegistryAccess, registrationEnvironment) -> commandDispatcher.register(CommandManager.literal("info").executes(context -> {
+
+
+			System.out.println(glowchestswhatever);
+			System.out.println(chestBlockEntity);
+			System.out.println(haveblockdisplay);
+
+
+			return 1;
+		}))));
 
 
 
@@ -89,126 +111,95 @@ public class ChestHighlighter implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryaccess, enviroment) -> dispatcher.register(literal("glowchests").requires(source -> source.hasPermissionLevel(3)).then(literal("glowpos").then(argument("blockpos", BlockPosArgumentType.blockPos()).then(argument("color", IntegerArgumentType.integer()).executes(this::spawnblockpos))))));
 
 
-
-
-
-
-
 		ServerTickEvents.START_WORLD_TICK.register(world -> {
 			Set<BlockPos> seenPositions = new HashSet<>();
-
-			for (Iterator<Map.Entry<ChestBlockEntity, BlockPos>> it = chestBlockEntity.entrySet().iterator(); it.hasNext(); ) {
-				Map.Entry<ChestBlockEntity, BlockPos> entry = it.next();
-				BlockPos pos = entry.getValue();
-
-
-
-				BlockEntity chestBlock1 = world.getBlockEntity(pos);
-
-				List<String> itemnamelist = new ArrayList<>();
-
-
-
-				if (chestBlock1 instanceof ChestBlockEntity chestBlock) {
-
-
-					for (int i = 0; i < chestBlock.size(); i++) {
-						if (!chestBlock.getStack(i).isOf(Items.AIR)) {
-							String string = chestBlock.getStack(i).getName().getString();
-							itemnamelist.add(string);
-						}
-
-
-					}
-
-					ChestTag chestTag = new ChestTag(pos, itemnamelist);
-
-
-					glowchestswhatever.put(chestBlock, chestTag);
-
-
-
-				}
-
-
-
-
-
-				// Deduplicate
-				if (!seenPositions.add(pos)) {
-					it.remove();
-					continue;
-				}
-
-				// Validate block existence
-				if (world.isChunkLoaded(pos) && !world.getBlockState(pos).isOf(Blocks.CHEST)) {
-					haveblockdisplay.remove(entry.getKey());
-					it.remove();
-				}
-			}
-
-
-
-		});
-
-		ServerTickEvents.END_WORLD_TICK.register(world -> {
-
-
+			Map<ChestBlockEntity, ChestTag> newTags = new HashMap<>();
 			Map<String, Integer> nameToColor = new HashMap<>();
+			Set<ChestBlockEntity> chestsToRemove = new HashSet<>();
+
+			// Parse config
 			for (String entry : Config.stringList) {
 				String[] parts = entry.split(":", 2);
 				if (parts.length == 2) {
 					try {
 						nameToColor.put(parts[0], Integer.parseInt(parts[1]));
-					} catch (NumberFormatException ignored) {
-					}
+					} catch (NumberFormatException ignored) {}
 				}
 			}
 
+			// Work from a snapshot of the chest map
+			for (Map.Entry<ChestBlockEntity, BlockPos> entry : new HashMap<>(chestBlockEntity).entrySet()) {
+				ChestBlockEntity chestBlock = entry.getKey();
+				BlockPos pos = entry.getValue();
 
-
-			for (Iterator<Map.Entry<ChestBlockEntity, ChestTag>> it = glowchestswhatever.entrySet().iterator(); it.hasNext(); ) {
-				Map.Entry<ChestBlockEntity, ChestTag> entry = it.next();
-				BlockPos pos = entry.getValue().pos;
-				List<String> itemNames = entry.getValue().itemName;
-
-				boolean shouldGlow = false;
-				int color = 0xFFFFFF; // default white
-				for (String itemname : itemNames) {
-					if (nameToColor.containsKey(itemname)) {
-						shouldGlow = true;
-						color = nameToColor.get(itemname);
-						break; // use the first match
-					}
+				// Deduplicate
+				if (!seenPositions.add(pos)) {
+					chestsToRemove.add(chestBlock);
+					continue;
 				}
 
 				BlockState state = world.getBlockState(pos);
-				if (state.isOf(Blocks.CHEST)) {
-					if (shouldGlow) {
-						if (!haveblockdisplay.containsKey(entry.getKey())) {
-							Direction facing = ChestBlock.getFacing(state);
-							Entity entity = getentity(color, facing, pos, world); // color is used here
-							haveblockdisplay.put(entry.getKey(), entity);
-							world.spawnEntity(entity);
-						}
-					} else {
-						Entity entity = haveblockdisplay.remove(entry.getKey());
-						if (entity != null) {
-							entity.kill(); // safely remove just this one
-						}
+				BlockEntity blockEntity = world.getBlockEntity(pos);
+
+				// Remove if not a valid chest
+				if (!state.isOf(Blocks.CHEST) || !(blockEntity instanceof ChestBlockEntity)) {
+					Entity entity = haveblockdisplay.get(chestBlockEntity);
+					if (entity != null) entity.kill();
+					chestsToRemove.add(chestBlock);
+					continue;
+				}
+
+				// Build item name list
+				List<String> itemnamelist = new ArrayList<>();
+				for (int i = 0; i < chestBlock.size(); i++) {
+					if (!chestBlock.getStack(i).isOf(Items.AIR)) {
+						itemnamelist.add(chestBlock.getStack(i).getName().getString());
 					}
 				}
 
-				// Remove glowchests entry if chest is gone
-				if (world.isChunkLoaded(pos) && !state.isOf(Blocks.CHEST)) {
-					Entity entity = haveblockdisplay.remove(entry.getKey());
-					if (entity != null) {
-						entity.kill();
+				// Store chest tag
+				ChestTag tag = new ChestTag(pos, itemnamelist);
+				newTags.put(chestBlock, tag);
+
+				// Glow logic
+				boolean shouldGlow = false;
+				int color = 0xFFFFFF;
+				for (String itemName : itemnamelist) {
+					if (nameToColor.containsKey(itemName)) {
+						shouldGlow = true;
+						color = nameToColor.get(itemName);
+						break;
 					}
-					it.remove();
+				}
+
+				// Handle glowing
+				if (shouldGlow) {
+					if (!haveblockdisplay.containsKey(chestBlock)) {
+						Direction facing = ChestBlock.getFacing(state);
+						Entity displayEntity = getentity(color, facing, pos, world);
+						haveblockdisplay.put(chestBlock, displayEntity);
+						world.spawnEntity(displayEntity);
+					}
+				} else {
+					Entity entity = haveblockdisplay.remove(chestBlock);
+					if (entity != null) entity.kill();
 				}
 			}
+
+			// Clean up chests to remove
+			for (ChestBlockEntity toRemove : chestsToRemove) {
+				chestBlockEntity.remove(toRemove);
+			}
+
+			// Apply new tags
+
+			glowchestswhatever.putAll(newTags);
 		});
+
+
+
+
+
 	}
 
 
@@ -224,7 +215,7 @@ public class ChestHighlighter implements ModInitializer {
 
 
 
-			context.getSource().getWorld().spawnEntity(getentity(color, facing, blockpos, world));
+			context.getSource().getWorld().spawnEntity(getentity(color, facing, blockpos, context.getSource().getWorld()));
 
 			return 1;
 		}

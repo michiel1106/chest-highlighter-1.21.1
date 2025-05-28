@@ -6,6 +6,7 @@ import bikerboys.chesthighlighter.ChestTag;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldEvents;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,8 +35,10 @@ public class idkfknow {
 
 
 
-            if (ChestHighlighter.world != null) {
-                if(!ChestHighlighter.world.isClient) {
+
+            if (ChestHighlighter.chestblockserverworld != null) {
+                if(!ChestHighlighter.chestblockserverworld.isClient) {
+
 
 
                     if (!ChestHighlighter.chestBlockEntity.containsValue(blockPos)) {
