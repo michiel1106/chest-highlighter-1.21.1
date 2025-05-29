@@ -29,18 +29,6 @@ public class idkfknow {
 
 
 
-        if (ChestHighlighter.world != null) {
-                if(!ChestHighlighter.world.isClient) {
-
-
-                    if (!ChestHighlighter.chestBlockEntity.containsValue(blockPos)) {
-
-
-
-                    //    ChestHighlighter.chestBlockEntity.put(chestBlock, blockPos);
-                    }
-                }
-            }
         }
     }
 
